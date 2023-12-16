@@ -57,6 +57,16 @@ void setTimeZone(char *timezone) {
     setenv("TZ", timezone, 1);
 }
 
+// TIME/DATE FORMATTING
+// %W: week number of the year
+// %a: abbreviated weekday name according to the current locale (e.g., Sun, Mon, Tue, etc.).
+// %d: day of the month as a decimal number (01-31).
+// %m: month of the year as a decimal number (01-12).
+// %b: abbreviated month name according to the current locale (e.g., Jan, Feb, Mar, etc.).
+// %H:%M: Represents the hour (00-23) and minute (00-59) in 24-hour clock format.
+// %Z: Represents the timezone abbreviation (e.g., CET, EST, PST).
+// %Y: Represents the year as a four-digit number (2023).
+// %y: Represents the year as a two-digit number (23).
 char *makeTimes(char *format, char *timezone) {
     char buffer[129];
     time_t timeValue;
@@ -200,7 +210,7 @@ int main(void) {
         loadAverages = getLoadAverage();
         battery = getBatteryStatus("/sys/class/power_supply/BAT0");
 
-        timeMadrid = makeTimes("%d/%m/%y %H:%M:%S ", madridTimeZone);
+        timeMadrid = makeTimes(" %d/%m/%y  %H:%M:%S ", madridTimeZone);
         keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
         temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
         temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
