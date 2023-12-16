@@ -10,7 +10,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <dirent.h>
 #include <X11/Xlib.h>
 
 // Timezones
@@ -30,6 +30,8 @@ char *readFileContents(char *filepath);
 char *getBatteryStatus(char *batteryPath);
 char *getTemperature(char *sensorPath);
 char *executeScript(char *command);
+char *getMemoryUsage(void);
+int getTrashStatus(void);
 
 // Function implementations
 char *printFormattedString(char *format, ...) {
@@ -232,6 +234,33 @@ char *getMemoryUsage(void) {
     return result;
 }
 
+// Custom addition: function to get num. of files in the trash
+int getTrashStatus(void) {
+    int file_count = 0;
+    struct dirent* entry;
+
+    // Open the home trash directory accordin to Freedesktop.org
+    // $XDG_DATA_HOME/Trash
+    DIR* dir = opendir("/home/mgotor/.local/share/Trash/files"); 
+
+    if (dir == NULL) {
+        return 0;
+    }
+
+    // Increment count for regular files and directories
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG || entry->d_type == DT_DIR) {
+            file_count++;
+        }
+    }
+
+    // Close the directory
+    closedir(dir);
+
+    // Exclude current "." and parent ".." directories (ls -lAh | wc -l)
+    return (file_count - 2);
+}
+
 // Allows capturing, processing, and formatting the output, with better error
 // handling within the program, unlike system("cmd");
 char *executeScript(char *command) {
@@ -255,6 +284,7 @@ char *executeScript(char *command) {
 
 int main(void) {
     char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap, *memoryUsage;
+    int trashStatus;
 
     if (!(display = XOpenDisplay(NULL))) {
         fprintf(stderr, "dwmstatus: cannot open display.\n");
@@ -265,14 +295,15 @@ int main(void) {
         loadAverages = getLoadAverage();
         battery = getBatteryStatus("/sys/class/power_supply/BAT0");
 
+        trashStatus = getTrashStatus();
         memoryUsage = getMemoryUsage();
         timeMadrid = makeTimes(" %d/%m/%y  %H:%M:%S ", madridTimeZone);
         keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
         temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
         temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
 
-        status = printFormattedString(" Mem %s | KB:%s | %s %s | L:%s | %s",
-            memoryUsage, keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
+        status = printFormattedString("Trash: %d | Mem %s | KB:%s | %s %s | L:%s | %s",
+            trashStatus, memoryUsage, keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
         setStatus(status);
 
         free(memoryUsage);
