@@ -1,4 +1,5 @@
 #define _BSD_SOURCE
+#define BUF_SIZE 256
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,6 +178,60 @@ char *getTemperature(char *sensorPath) {
     return printFormattedString("%02.2f°C", atof(contents) / 1000);
 }
 
+// Custom addition: function to calculate memory usage
+char *getMemoryUsage(void) {
+    FILE *file = fopen("/proc/meminfo", "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return NULL;
+    }
+
+    char line[BUF_SIZE];
+    unsigned long mem_total = 0, mem_free = 0, buffers = 0, sreclaimable = 0, cached = 0;
+    // Read each line of /proc/meminfo special file and check if the line matches any of the patterns.
+    // If it does, assign the extracted value to the corresponding variable
+    while (fgets(line, BUF_SIZE, file)) {
+        unsigned long value;
+        if (sscanf(line, "MemTotal: %lu kB", &value) == 1) {
+            mem_total = value;
+        } else if (sscanf(line, "MemFree: %lu kB", &value) == 1) {
+            mem_free = value;
+        } else if (sscanf(line, "Buffers: %lu kB", &value) == 1) {
+            buffers = value;
+        } else if (sscanf(line, "SReclaimable: %lu kB", &value) == 1) {
+            sreclaimable = value;
+        } else if (sscanf(line, "Cached: %lu kB", &value) == 1) {
+            cached = value;
+        }
+    }
+
+    fclose(file);
+
+    // According to i3statusbar and gotop (considers SReclaimable as USED memory)
+    // unsigned long buff_cached = cached + sreclaimable + buffers;
+
+    // According to command "free" (considers SReclaimable as FREE memory)
+    unsigned long buff_cached = cached + buffers;
+    unsigned long kB_used = mem_total - mem_free - buff_cached;
+    double MiB_used = (double)kB_used / 1024;
+
+    // For debugging purposes
+    // printf("Total Memory: %lu kB\n", mem_total);
+    // printf("Cached:       %lu kB\n", cached);
+    // printf("Free Memory:  %lu kB\n", mem_free);
+    // printf("Buffers:      %lu kB\n", buffers);
+    // printf("SReclaimable: %lu kB\n", sreclaimable);
+    // printf("buff/cache:   %lu kB\n", buff_cached);
+    // printf("Used:         %.1f MiB\n", MiB_used);
+
+    char *result = malloc(20);
+    if (result == NULL) {
+        return NULL;
+    }
+    snprintf(result, 20, "%d MiB", (int)MiB_used);
+    return result;
+}
+
 // Allows capturing, processing, and formatting the output, with better error
 // handling within the program, unlike system("cmd");
 char *executeScript(char *command) {
@@ -199,7 +254,7 @@ char *executeScript(char *command) {
 }
 
 int main(void) {
-    char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap;
+    char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap, *memoryUsage;
 
     if (!(display = XOpenDisplay(NULL))) {
         fprintf(stderr, "dwmstatus: cannot open display.\n");
@@ -210,15 +265,17 @@ int main(void) {
         loadAverages = getLoadAverage();
         battery = getBatteryStatus("/sys/class/power_supply/BAT0");
 
+        memoryUsage = getMemoryUsage();
         timeMadrid = makeTimes(" %d/%m/%y  %H:%M:%S ", madridTimeZone);
         keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
         temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
         temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
 
-        status = printFormattedString(" KB:%s | %s %s | L:%s | %s",
-            keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
+        status = printFormattedString(" Mem %s | KB:%s | %s %s | L:%s | %s",
+            memoryUsage, keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
         setStatus(status);
 
+        free(memoryUsage);
         free(keyboardMap);
         free(temperature0);
         free(temperature1);
