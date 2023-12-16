@@ -302,8 +302,8 @@ int main(void) {
         temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
         temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
 
-        status = printFormattedString("Trash: %d | Mem %s | KB:%s | %s %s | L:%s | %s",
-            trashStatus, memoryUsage, keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
+        status = printFormattedString("  %d |  %s |  %s |  %s %s |  %s | %s",
+            trashStatus, keyboardMap, memoryUsage, temperature0, temperature1, loadAverages, timeMadrid);
         setStatus(status);
 
         free(memoryUsage);
