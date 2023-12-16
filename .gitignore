@@ -1,0 +1,3 @@
+# Exclude compiled object and ELF files
+dwmstatus.o
+dwmstatus
