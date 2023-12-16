@@ -1,8 +1,3 @@
-/*
- * Copy me if you can.
- * by 20h
- */
-
 #define _BSD_SOURCE
 #include <unistd.h>
 #include <stdio.h>
@@ -17,236 +12,213 @@
 
 #include <X11/Xlib.h>
 
-char *tzargentina = "America/Buenos_Aires";
-char *tzutc = "UTC";
-char *tzberlin = "Europe/Berlin";
+// Timezones
+char *utcTimeZone = "UTC";
+char *madridTimeZone = "Europe/Madrid";
 
-static Display *dpy;
+// X11 display
+static Display *display;
 
-char *
-smprintf(char *fmt, ...)
-{
-	va_list fmtargs;
-	char *ret;
-	int len;
+// Functions
+char *printFormattedString(char *format, ...);
+void setTimeZone(char *timezone);
+char *makeTimes(char *format, char *timezone);
+void setStatus(char *status);
+char *getLoadAverage(void);
+char *readFileContents(char *filepath);
+char *getBatteryStatus(char *batteryPath);
+char *getTemperature(char *sensorPath);
+char *executeScript(char *command);
 
-	va_start(fmtargs, fmt);
-	len = vsnprintf(NULL, 0, fmt, fmtargs);
-	va_end(fmtargs);
+// Function implementations
+char *printFormattedString(char *format, ...) {
+    va_list arguments;
+    char *result;
+    int length;
 
-	ret = malloc(++len);
-	if (ret == NULL) {
-		perror("malloc");
-		exit(1);
-	}
+    va_start(arguments, format);
+    length = vsnprintf(NULL, 0, format, arguments);
+    va_end(arguments);
 
-	va_start(fmtargs, fmt);
-	vsnprintf(ret, len, fmt, fmtargs);
-	va_end(fmtargs);
+    result = malloc(++length);
+    if (result == NULL) {
+        perror("malloc");
+        exit(1);
+    }
 
-	return ret;
+    va_start(arguments, format);
+    vsnprintf(result, length, format, arguments);
+    va_end(arguments);
+
+    return result;
 }
 
-void
-settz(char *tzname)
-{
-	setenv("TZ", tzname, 1);
+void setTimeZone(char *timezone) {
+    setenv("TZ", timezone, 1);
 }
 
-char *
-mktimes(char *fmt, char *tzname)
-{
-	char buf[129];
-	time_t tim;
-	struct tm *timtm;
+char *makeTimes(char *format, char *timezone) {
+    char buffer[129];
+    time_t timeValue;
+    struct tm *timeInfo;
 
-	settz(tzname);
-	tim = time(NULL);
-	timtm = localtime(&tim);
-	if (timtm == NULL)
-		return smprintf("");
+    setTimeZone(timezone);
+    timeValue = time(NULL);
+    timeInfo = localtime(&timeValue);
+    if (timeInfo == NULL)
+        return printFormattedString("");
 
-	if (!strftime(buf, sizeof(buf)-1, fmt, timtm)) {
-		fprintf(stderr, "strftime == 0\n");
-		return smprintf("");
-	}
+    if (!strftime(buffer, sizeof(buffer) - 1, format, timeInfo)) {
+        fprintf(stderr, "strftime == 0\n");
+        return printFormattedString("");
+    }
 
-	return smprintf("%s", buf);
+    return printFormattedString("%s", buffer);
 }
 
-void
-setstatus(char *str)
-{
-	XStoreName(dpy, DefaultRootWindow(dpy), str);
-	XSync(dpy, False);
+void setStatus(char *str) {
+    XStoreName(display, DefaultRootWindow(display), str);
+    XSync(display, False);
 }
 
-char *
-loadavg(void)
-{
-	double avgs[3];
+char *getLoadAverage(void) {
+    double averages[3];
 
-	if (getloadavg(avgs, 3) < 0)
-		return smprintf("");
+    if (getloadavg(averages, 3) < 0)
+        return printFormattedString("");
 
-	return smprintf("%.2f %.2f %.2f", avgs[0], avgs[1], avgs[2]);
+    return printFormattedString("%.2f %.2f %.2f", averages[0], averages[1], averages[2]);
 }
 
-char *
-readfile(char *base, char *file)
-{
-	char *path, line[513];
-	FILE *fd;
+char *readFileContents(char *filepath) {
+    char line[513];
+    FILE *fileDescriptor;
 
-	memset(line, 0, sizeof(line));
+    memset(line, 0, sizeof(line));
 
-	path = smprintf("%s/%s", base, file);
-	fd = fopen(path, "r");
-	free(path);
-	if (fd == NULL)
-		return NULL;
+    fileDescriptor = fopen(filepath, "r");
+    if (fileDescriptor == NULL)
+        return NULL;
 
-	if (fgets(line, sizeof(line)-1, fd) == NULL) {
-		fclose(fd);
-		return NULL;
-	}
-	fclose(fd);
+    if (fgets(line, sizeof(line) - 1, fileDescriptor) == NULL) {
+        fclose(fileDescriptor);
+        return NULL;
+    }
+    fclose(fileDescriptor);
 
-	return smprintf("%s", line);
+    return printFormattedString("%s", line);
 }
 
-char *
-getbattery(char *base)
-{
-	char *co, status;
-	int descap, remcap;
+char *getBatteryStatus(char *base) {
+    char *contents, status;
+    int designCapacity, remainingCapacity;
 
-	descap = -1;
-	remcap = -1;
+    designCapacity = -1;
+    remainingCapacity = -1;
 
-	co = readfile(base, "present");
-	if (co == NULL)
-		return smprintf("");
-	if (co[0] != '1') {
-		free(co);
-		return smprintf("not present");
-	}
-	free(co);
+    contents = readFileContents(printFormattedString("%s/%s", base, "present"));
+    if (contents == NULL)
+        return printFormattedString("");
+    if (contents[0] != '1') {
+        free(contents);
+        return printFormattedString("not present");
+    }
+    free(contents);
 
-	co = readfile(base, "charge_full_design");
-	if (co == NULL) {
-		co = readfile(base, "energy_full_design");
-		if (co == NULL)
-			return smprintf("");
-	}
-	sscanf(co, "%d", &descap);
-	free(co);
+    contents = readFileContents(printFormattedString("%s/%s", base, "charge_full_design"));
+    if (contents == NULL) {
+        contents = readFileContents(printFormattedString("%s/%s", base, "energy_full_design"));
+        if (contents == NULL)
+            return printFormattedString("");
+    }
+    sscanf(contents, "%d", &designCapacity);
+    free(contents);
 
-	co = readfile(base, "charge_now");
-	if (co == NULL) {
-		co = readfile(base, "energy_now");
-		if (co == NULL)
-			return smprintf("");
-	}
-	sscanf(co, "%d", &remcap);
-	free(co);
+    contents = readFileContents(printFormattedString("%s/%s", base, "charge_now"));
+    if (contents == NULL) {
+        contents = readFileContents(printFormattedString("%s/%s", base, "energy_now"));
+        if (contents == NULL)
+            return printFormattedString("");
+    }
+    sscanf(contents, "%d", &remainingCapacity);
+    free(contents);
 
-	co = readfile(base, "status");
-	if (!strncmp(co, "Discharging", 11)) {
-		status = '-';
-	} else if(!strncmp(co, "Charging", 8)) {
-		status = '+';
-	} else {
-		status = '?';
-	}
+    contents = readFileContents(printFormattedString("%s/%s", base, "status"));
+    if (!strncmp(contents, "Discharging", 11)) {
+        status = '-';
+    } else if (!strncmp(contents, "Charging", 8)) {
+        status = '+';
+    } else {
+        status = '?';
+    }
 
-	if (remcap < 0 || descap < 0)
-		return smprintf("invalid");
+    if (remainingCapacity < 0 || designCapacity < 0)
+        return printFormattedString("invalid");
 
-	return smprintf("%.0f%%%c", ((float)remcap / (float)descap) * 100, status);
+    return printFormattedString("%.0f%%%c", ((float)remainingCapacity / (float)designCapacity) * 100, status);
 }
 
-char *
-gettemperature(char *base, char *sensor)
-{
-	char *co;
+char *getTemperature(char *sensorPath) {
+    char *contents;
 
-	co = readfile(base, sensor);
-	if (co == NULL)
-		return smprintf("");
-	return smprintf("%02.0f°C", atof(co) / 1000);
+    contents = readFileContents(sensorPath);
+    if (contents == NULL)
+        return printFormattedString("");
+    return printFormattedString("%02.2f°C", atof(contents) / 1000);
 }
 
-char *
-execscript(char *cmd)
-{
-	FILE *fp;
-	char retval[1025], *rv;
+// Allows capturing, processing, and formatting the output, with better error
+// handling within the program, unlike system("cmd");
+char *executeScript(char *command) {
+    FILE *file;
+    char returnValue[1025], *result;
 
-	memset(retval, 0, sizeof(retval));
+    memset(returnValue, 0, sizeof(returnValue));
 
-	fp = popen(cmd, "r");
-	if (fp == NULL)
-		return smprintf("");
+    file = popen(command, "r");
+    if (file == NULL)
+        return printFormattedString("");
 
-	rv = fgets(retval, sizeof(retval), fp);
-	pclose(fp);
-	if (rv == NULL)
-		return smprintf("");
-	retval[strlen(retval)-1] = '\0';
+    result = fgets(returnValue, sizeof(returnValue), file);
+    pclose(file);
+    if (result == NULL)
+        return printFormattedString("");
+    returnValue[strlen(returnValue) - 1] = '\0';
 
-	return smprintf("%s", retval);
+    return printFormattedString("%s", returnValue);
 }
 
-int
-main(void)
-{
-	char *status;
-	char *avgs;
-	char *bat;
-	char *tmar;
-	char *tmutc;
-	char *tmbln;
-	char *t0;
-	char *t1;
-	char *kbmap;
-	char *surfs;
+int main(void) {
+    char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap;
 
-	if (!(dpy = XOpenDisplay(NULL))) {
-		fprintf(stderr, "dwmstatus: cannot open display.\n");
-		return 1;
-	}
+    if (!(display = XOpenDisplay(NULL))) {
+        fprintf(stderr, "dwmstatus: cannot open display.\n");
+        return 1;
+    }
 
-	for (;;sleep(30)) {
-		avgs = loadavg();
-		bat = getbattery("/sys/class/power_supply/BAT0");
-		tmar = mktimes("%H:%M", tzargentina);
-		tmutc = mktimes("%H:%M", tzutc);
-		tmbln = mktimes("KW %W %a %d %b %H:%M %Z %Y", tzberlin);
-		kbmap = execscript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
-		surfs = execscript("surf-status");
-		t0 = gettemperature("/sys/devices/virtual/thermal/thermal_zone0", "temp");
-		t1 = gettemperature("/sys/devices/virtual/thermal/thermal_zone1", "temp");
+    for (;; sleep(1)) {
+        loadAverages = getLoadAverage();
+        battery = getBatteryStatus("/sys/class/power_supply/BAT0");
 
-		status = smprintf("S:%s K:%s T:%s|%s L:%s B:%s A:%s U:%s %s",
-				surfs, kbmap, t0, t1, avgs, bat, tmar, tmutc,
-				tmbln);
-		setstatus(status);
+        timeMadrid = makeTimes("%d/%m/%y %H:%M:%S ", madridTimeZone);
+        keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
+        temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
+        temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
 
-		free(surfs);
-		free(kbmap);
-		free(t0);
-		free(t1);
-		free(avgs);
-		free(bat);
-		free(tmar);
-		free(tmutc);
-		free(tmbln);
-		free(status);
-	}
+        status = printFormattedString(" KB:%s | %s %s | L:%s | %s",
+            keyboardMap, temperature0, temperature1, loadAverages, timeMadrid);
+        setStatus(status);
 
-	XCloseDisplay(dpy);
+        free(keyboardMap);
+        free(temperature0);
+        free(temperature1);
+        free(loadAverages);
+        free(battery);
+        free(timeMadrid);
+        free(status);
+    }
 
-	return 0;
+    XCloseDisplay(display);
+
+    return 0;
 }
-
