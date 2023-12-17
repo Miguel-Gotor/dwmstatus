@@ -283,7 +283,7 @@ char *executeScript(char *command) {
 }
 
 int main(void) {
-    char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap, *memoryUsage, *currentVolume;
+    char *status, *loadAverages, *battery, *timeMadrid, *temperature0, *temperature1, *keyboardMap, *memoryUsage, *currentVolume, *diskUsage;
     int trashStatus;
     
 
@@ -299,18 +299,21 @@ int main(void) {
         trashStatus = getTrashStatus();
         memoryUsage = getMemoryUsage();
         timeMadrid = makeTimes(" %d/%m/%y  %H:%M:%S ", madridTimeZone);
-        keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
+        // keyboardMap = executeScript("setxkbmap -query | grep layout | cut -d':' -f 2- | tr -d ' '");
         currentVolume = executeScript("pactl get-sink-volume @DEFAULT_SINK@ | awk '{print $5}'");
+        diskUsage = executeScript("free-disk");
         temperature0 = getTemperature("/sys/class/hwmon/hwmon2/temp1_input");
         temperature1 = getTemperature("/sys/class/hwmon/hwmon1/temp1_input");
 
-        status = printFormattedString("  %s │  %d │  %s │  %s │  %s %s │  %s │ %s",
-            currentVolume, trashStatus, keyboardMap, memoryUsage, temperature0, temperature1, loadAverages, timeMadrid);
+        // status = printFormattedString("  %s │  %d │  %s │  %s │  %s %s │  %s │ %s",
+        status = printFormattedString("  %s │  %d │  %s │  %s │  %s %s │  %s │ %s",
+            currentVolume, trashStatus, diskUsage, memoryUsage, temperature0, temperature1, loadAverages, timeMadrid);
         setStatus(status);
 
+        free(diskUsage);
         free(currentVolume);
         free(memoryUsage);
-        free(keyboardMap);
+        // free(keyboardMap);
         free(temperature0);
         free(temperature1);
         free(loadAverages);
